@@ -26,23 +26,21 @@ setup(
         "scipy",
         "sympy",
     ],
-    # Which Python packages to include in (and exclude from) this ROS package
+    # Which Python packages to include in the ROS package
     packages=[
-        # Include the pure Python handeye_4dof source files
-        "handeye_4dof",
-        # *find_packages(where=str(package_base_path / "src"), include=["handeye_4dof"]),
-        # Include the handeye_4dof_ros source files, but not the tests
-        "handeye_4dof_ros",
-        # *find_packages(where=str(package_base_path), include=["handeye_4dof_ros"], exclude=["tests"]),
+        "handeye_4dof_ros",  # ROS wrapper package
+        "handeye_4dof",  # Original handeye_4dof package (pure python)
     ],
-    # Point setuptools to the paths where it can find the packages
+    # Point setuptools to the paths where it can find the packages' source files, relative to this setup.py script
     package_dir={
-        "handeye_4dof": "../src/handeye_4dof",
         "handeye_4dof_ros": "./handeye_4dof_ros",
+        "handeye_4dof": "../src/handeye_4dof",
     },
     # Register the programs to run to be recognized as executables by the ROS 2 command line tools
     entry_points={
-        "console_scripts": ["calibrator_4dof = handeye_4dof_ros.calibrator_4dof:main"],
+        "console_scripts": [
+            "example = handeye_4dof_ros.example:main",
+        ],
     },
     # Register data files to install the package correctly (these paths must be relative)
     data_files=list(
@@ -56,7 +54,9 @@ setup(
             # Find all launch files inside the launch/ directory
             str(Path("share") / package_name / "launch"): [str(path) for path in Path("launch").glob("**/*.launch.*")],
             # Add the example data files to the ROS share
-            str(Path("share") / package_name / "example_data"): [str(path) for path in Path("../example_data").glob("*.pkl")],
+            str(Path("share") / package_name / "example_data"): [
+                str(path) for path in Path("../example_data").glob("*.pkl")
+            ],
         }.items()
     ),
     # Test configurations
