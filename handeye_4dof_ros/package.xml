@@ -8,16 +8,19 @@
   <license>MIT</license>
 
   <!-- ROS built-in dependencies -->
-  <depend>rclpy</depend>
-  <depend>tf2</depend>
-  <depend>tf2_ros</depend>
-  <depend>tf2_py</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>tf2</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf2_py</exec_depend>
 
   <!-- Third-party ROS dependencies -->
 
   <!-- First-party ROS dependencies -->
 
   <!-- Other dependencies -->
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-sympy</exec_depend>
 
   <!-- Test dependencies -->
   <test_depend>ament_copyright</test_depend>
