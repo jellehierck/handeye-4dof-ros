@@ -4,7 +4,7 @@
   <name>handeye_4dof_ros</name>
   <version>0.0.0</version>
   <description>Handeye calibration for 4DOF manipulators using dual quaternions using ROS 2.</description>
-  <maintainer email="TODO">TODO</maintainer>
+  <maintainer email="TODO@TODO.com">TODO</maintainer>
   <license>MIT</license>
 
   <!-- ROS built-in dependencies -->
