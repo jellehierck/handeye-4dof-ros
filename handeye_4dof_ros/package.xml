@@ -9,11 +9,13 @@
 
   <!-- ROS built-in dependencies -->
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>tf2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>tf2_py</exec_depend>
+
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
 
   <!-- Third-party ROS dependencies -->
+  <exec_depend>realsense2_camera</exec_depend>
 
   <!-- First-party ROS dependencies -->
 
