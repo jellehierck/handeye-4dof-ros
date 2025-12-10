@@ -20,10 +20,9 @@ setup(
     # List pure Python dependencies (no ROS packages)
     install_requires=[
         "setuptools",
-        # TODO: add symver to these packages
-        "numpy",
-        "scipy",
-        "sympy",
+        "numpy~=1.26",
+        "scipy~=1.11",
+        "sympy~=1.12",
     ],
     # Which Python packages to include in the ROS package
     packages=[
