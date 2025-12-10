@@ -22,8 +22,11 @@ SAMPLES_DIRECTORY = Path("/builder/samples")
 
 def tf_to_homogenous_matrix(transform: Transform) -> np.ndarray:
     """Convert a TF2 transform to a homogenous transformation matrix."""
+    # Construct homogenous array
+    homogenous_matrix = np.eye(4)
+
     # Quaternion to rotation matrix
-    rot_matrix = Rotation.from_quat(
+    homogenous_matrix[:3, :3] = Rotation.from_quat(
         [
             transform.rotation.x,
             transform.rotation.y,
@@ -32,13 +35,10 @@ def tf_to_homogenous_matrix(transform: Transform) -> np.ndarray:
         ]
     ).as_matrix()
 
-    # Translation vector as column vector
-    translation_vector = np.array([[transform.translation.x, transform.translation.y, transform.translation.z]]).T
-
-    # Construct homogenous array
-    homogenous_matrix = np.eye(4)
-    homogenous_matrix[:3, :3] = rot_matrix
-    homogenous_matrix[:3, -1] = translation_vector
+    # Fill translation vector
+    homogenous_matrix[:3, 0] = transform.translation.x
+    homogenous_matrix[:3, 1] = transform.translation.y
+    homogenous_matrix[:3, 2] = transform.translation.z
 
     return homogenous_matrix
 
@@ -47,12 +47,14 @@ def homogenous_matrix_to_tf(matrix: np.ndarray) -> Transform:
     """Convert a homogenous transformation matrix to a TF2 transform."""
     transform = Transform()
 
+    # Convert rotation matrix to quaternion
     rot_quat = Rotation.from_matrix(matrix[:3, :3]).as_quat(canonical=False)
     transform.rotation.x = rot_quat[0]
     transform.rotation.y = rot_quat[1]
     transform.rotation.z = rot_quat[2]
     transform.rotation.w = rot_quat[3]
 
+    # Extract translation
     transform.translation.x = matrix[0, -1]
     transform.translation.y = matrix[1, -1]
     transform.translation.z = matrix[2, -1]
@@ -71,7 +73,7 @@ class Calibrator4DofNode(Node):
         self.init_parameters()
 
         # Declare services
-        self.srv_update_handeye = self.create_service(std_srvs.srv.SetBool, "/update_handeye", self.cb_update_handeye)
+        self.srv_update_handeye = self.create_service(std_srvs.srv.SetBool, "~/update_handeye", self.cb_update_handeye)
 
         # TF2 initialization
         self.tf_buffer = Buffer()

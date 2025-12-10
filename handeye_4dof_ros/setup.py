@@ -38,7 +38,7 @@ setup(
     entry_points={
         "console_scripts": [
             "example = handeye_4dof_ros.example:main",
-            "calibrator = handeye_4dof_ros.calibrator_4dof:main",
+            "calibrator = handeye_4dof_ros.calibrator:main",
         ],
     },
     # Register data files to install the package correctly (these paths must be relative)
