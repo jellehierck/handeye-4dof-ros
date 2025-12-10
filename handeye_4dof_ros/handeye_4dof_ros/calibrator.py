@@ -1,4 +1,5 @@
 import pickle
+import typing
 from pathlib import Path
 
 import rclpy
@@ -8,7 +9,7 @@ from rclpy.node import Node
 import numpy as np
 import std_srvs.srv
 from geometry_msgs.msg import Transform, TransformStamped
-from handeye_4dof import Calibrator4DOF
+from handeye_4dof import Calibrator4DOF, DualQuaternion
 from scipy.spatial.transform import Rotation
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
@@ -36,9 +37,9 @@ def tf_to_homogenous_matrix(transform: Transform) -> np.ndarray:
     ).as_matrix()
 
     # Fill translation vector
-    homogenous_matrix[:3, 0] = transform.translation.x
-    homogenous_matrix[:3, 1] = transform.translation.y
-    homogenous_matrix[:3, 2] = transform.translation.z
+    homogenous_matrix[0, -1] = transform.translation.x
+    homogenous_matrix[1, -1] = transform.translation.y
+    homogenous_matrix[2, -1] = transform.translation.z
 
     return homogenous_matrix
 
@@ -60,6 +61,43 @@ def homogenous_matrix_to_tf(matrix: np.ndarray) -> Transform:
     transform.translation.z = matrix[2, -1]
 
     return transform
+
+
+def transform_pairs_to_dual_quaternions(
+    tf_pairs: list[tuple[np.ndarray, np.ndarray]],
+) -> list[tuple[DualQuaternion, DualQuaternion]]:
+    # Initialize a list of quaternion pairs
+    # This list is filled with None at first, but is guaranteed to be quaternion pairs at the end of this function
+    # Type checking is bypassed with typing.cast()
+    dual_quaternions: list[tuple[DualQuaternion, DualQuaternion]] = typing.cast(
+        "list[tuple[DualQuaternion, DualQuaternion]]",  # Guaranteed type at the end of this function
+        [None] * len(tf_pairs),  # Initial values
+    )
+    for i, (Ai, Bi) in enumerate(tf_pairs):
+        curr_theta_max = 0
+        pair_with_max_screw_angles: tuple[DualQuaternion, DualQuaternion] | None = None
+        for j, (Aj, Bj) in enumerate(tf_pairs):
+            if i == j:
+                continue
+            A = DualQuaternion.from_transform(np.dot(Aj, np.linalg.inv(Ai)))
+            B = DualQuaternion.from_transform(np.dot(np.linalg.inv(Bj), Bi))
+            theta1 = A.as_screw_params()[-1]
+            theta2 = B.as_screw_params()[-1]
+
+            # Obtain motions with maximal screw angles.
+            theta_sum = np.sum(np.abs([theta1, theta2]))
+            if theta_sum > curr_theta_max:
+                curr_theta_max = theta_sum
+                pair_with_max_screw_angles = (A, B)
+
+        if pair_with_max_screw_angles is None:
+            msg = f"No valid quaternion pair found for index {i}"
+            raise ValueError(msg)
+
+        dual_quaternions[i] = pair_with_max_screw_angles
+
+    # All entries are guaranteed to be tuples at this point
+    return dual_quaternions
 
 
 class Calibrator4DofNode(Node):
@@ -101,6 +139,9 @@ class Calibrator4DofNode(Node):
         self.eye_in_hand = self.declare_parameter("eye_in_hand", False).get_parameter_value().bool_value
         self.min_samples_stored = self.declare_parameter("min_stored", 3).get_parameter_value().integer_value
 
+        # Persistent sample storage
+        self.use_samples_from_disk = self.declare_parameter("samples_from_disk", False).get_parameter_value().bool_value
+
     def lookup_transform(
         self, target_frame: str, source_frame: str, time: rclpy.time.Time | None = None
     ) -> TransformStamped:
@@ -141,17 +182,29 @@ class Calibrator4DofNode(Node):
             robot_tf_matrix = tf_to_homogenous_matrix(tf_robot_e2b.transform)
         self.transform_pairs.append((sensor_tf_matrix, robot_tf_matrix))
 
+        if self.use_samples_from_disk:
+            # Load samples from disk
+            # TODO: Remove this temporary fix
+            self.transform_pairs = self.get_samples_from_disk()
+        else:
+            # Save samples to the disk
+            self.save_samples_to_disk()
+
         # Check if there are enough samples to compute a calibration
         if len(self.transform_pairs) < self.min_samples_stored:
-            self.save_samples_to_disk()
             # Successfully saved transformations, but did not compute a calibration since there are not enough samples
             res.message = f"Saved: {len(self.transform_pairs)} samples"
             res.success = True
             return res
 
         # There are enough samples to try to compute a calibration
-        calibrator = Calibrator4DOF(motions=self.transform_pairs)
-        calibration_tf_matrix = calibrator.calibrate().as_transform()
+        try:
+            calibrator = Calibrator4DOF(motions=transform_pairs_to_dual_quaternions(self.transform_pairs))
+            calibration_tf_matrix = calibrator.calibrate(antiparallel_screw_axes=True).as_transform()
+        except Exception as err:
+            res.message = f"Saved: {len(self.transform_pairs)} samples, but could not compute calibration: {err!r}"
+            res.success = False
+            return res
 
         calibration_tf_msg = TransformStamped()
         calibration_tf_msg.header.stamp = self.get_clock().now().to_msg()
@@ -167,7 +220,6 @@ class Calibrator4DofNode(Node):
 
         self.tf_broadcaster.sendTransform(calibration_tf_msg)
 
-        self.save_samples_to_disk()
         res.message = f"Saved and solved: {len(self.transform_pairs)} samples"
         res.success = True
         return res
@@ -175,9 +227,15 @@ class Calibrator4DofNode(Node):
     def save_samples_to_disk(self, samples_dir: Path = SAMPLES_DIRECTORY) -> None:
         """Save samples to the disk."""
         samples_dir.mkdir(parents=True, exist_ok=True)  # Ensure samples dir exists
-        filepath = samples_dir / "samples.yaml"
+        filepath = samples_dir / "samples.pkl"
         with filepath.open("wb") as f:
             pickle.dump(self.transform_pairs, f)
+
+    def get_samples_from_disk(self, samples_dir: Path = SAMPLES_DIRECTORY) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Read samples from the disk."""
+        filepath = samples_dir / "samples.pkl"
+        with filepath.open("rb") as f:
+            return pickle.load(f)
 
 
 def main(args: list[str] | None = None) -> None:
